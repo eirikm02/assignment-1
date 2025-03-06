@@ -4,7 +4,10 @@ import (
 	"assignment-1/models"   // Import models
 	"assignment-1/services" // Import services
 	"encoding/json"
+	"fmt"
+	"log"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -51,40 +54,84 @@ func InfoHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
-// Handler for population data
+// PopulationHandler handles requests to the population endpoint, where you get the population levels for a country.
 func PopulationHandler(w http.ResponseWriter, r *http.Request) {
 	// Extract country code from URL
-	countryCode := r.URL.Path[len("/countryinfo/v1/population/"):]
+	countryCode := extractCountryCode(r.URL.Path)
 	if countryCode == "" {
-		http.Error(w, "Missing country code", http.StatusBadRequest)
+		http.Error(w, "400 Bad Request: No ISO code specified. \n"+
+			"Example usage: .../countryinfo/population/no if you want to see the population for Norway. \n"+
+			"You can also optionally add for example ?limit=2000-2005 "+
+			"if you only want the data for a specific year gap.", http.StatusBadRequest)
 		return
 	}
 
-	// Mock population data
-	response := models.PopulationData{
-		Mean: 5044396,
-		Values: []models.YearlyPopulation{
-			{Year: 2010, Value: 4889252},
-			{Year: 2011, Value: 4953088},
-			{Year: 2012, Value: 5018573},
-			{Year: 2013, Value: 5079623},
-			{Year: 2014, Value: 5137232},
-			{Year: 2015, Value: 5188607},
-		},
+	// Extract optional year range from query parameters
+	startYear, endYear, err := extractYearRange(r.URL.Query().Get("limit"))
+	if err != nil {
+		http.Error(w, "400 Bad Request: "+err.Error(), http.StatusBadRequest)
+		return
 	}
 
-	// Return JSON response
-	jsonResponse(w, response)
+	// Fetch and process population data
+	populationResponse, err := services.GetPopulationData(countryCode, startYear, endYear)
+	if err != nil {
+		handlePopulationError(w, err)
+		return
+	}
+
+	// Send the response
+	sendPopulationResponse(w, populationResponse)
 }
 
-// Helper function to send JSON response
-func jsonResponse(w http.ResponseWriter, data interface{}) {
+// extractCountryCode extracts the country code from the URL path.
+func extractCountryCode(path string) string {
+	parts := strings.Split(path, "/")
+	if len(parts) >= 5 && parts[4] != "" {
+		return strings.ToUpper(parts[4])
+	}
+	return ""
+}
+
+// extractYearRange extracts and validates the year range from the query parameter.
+func extractYearRange(queryLimit string) (int, int, error) {
+	if queryLimit == "" {
+		return -1, -1, nil
+	}
+
+	years := strings.Split(queryLimit, "-")
+	if len(years) != 2 {
+		return -1, -1, fmt.Errorf("invalid year range format")
+	}
+
+	startYear, err1 := strconv.Atoi(years[0])
+	endYear, err2 := strconv.Atoi(years[1])
+	if err1 != nil || err2 != nil || startYear > endYear {
+		return -1, -1, fmt.Errorf("invalid year range format")
+	}
+
+	return startYear, endYear, nil
+}
+
+// handlePopulationError handles errors returned by the population data fetching process.
+func handlePopulationError(w http.ResponseWriter, err error) {
+	if strings.Contains(err.Error(), "404 Not Found") {
+		http.Error(w, err.Error(), http.StatusNotFound)
+	} else {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
+
+// sendPopulationResponse sends the population data as a JSON response.
+func sendPopulationResponse(w http.ResponseWriter, populationResponse *models.PopulationResponse) {
 	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(data); err != nil {
-		http.Error(w, "Failed to encode JSON response", http.StatusInternalServerError)
+	w.WriteHeader(http.StatusOK)
+	if err := json.NewEncoder(w).Encode(populationResponse); err != nil {
+		log.Println("Error encoding JSON response:", err)
 	}
 }
 
+// StatusHandler handles requests for API status
 func StatusHandler(w http.ResponseWriter, r *http.Request) {
 	// Check external API status
 	countriesNowStatus := services.CheckCountriesNowAPI()
@@ -104,13 +151,4 @@ func StatusHandler(w http.ResponseWriter, r *http.Request) {
 	// Return JSON response
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
-}
-
-// Helper function to calculate mean population
-func calculateMean(populationData []models.PopulationYear) float64 {
-	sum := 0
-	for _, data := range populationData {
-		sum += data.Value
-	}
-	return float64(sum) / float64(len(populationData))
 }
