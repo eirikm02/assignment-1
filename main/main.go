@@ -1,7 +1,7 @@
 package main
 
 import (
-	"assignment-1/handlers" // Import handlers
+	"assignment-1/handlers" // Import handler
 	"fmt"
 	"net/http"
 )

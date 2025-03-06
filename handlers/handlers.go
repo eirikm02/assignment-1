@@ -120,6 +120,7 @@ func handlePopulationError(w http.ResponseWriter, err error) {
 	} else {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
+
 }
 
 // sendPopulationResponse sends the population data as a JSON response.
@@ -131,7 +132,7 @@ func sendPopulationResponse(w http.ResponseWriter, populationResponse *models.Po
 	}
 }
 
-// StatusHandler handles requests for API status
+// StatusHandler handles request for API status
 func StatusHandler(w http.ResponseWriter, r *http.Request) {
 	// Check external API status
 	countriesNowStatus := services.CheckCountriesNowAPI()

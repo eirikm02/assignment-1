@@ -17,4 +17,4 @@ This is a RESTful web service that provides information about countries, includi
 - Example: `http://localhost:8080/countryinfo/v1/status/`
 
 ## Deployment
-The service is deployed on Render: [Render URL](#)
+The service is deployed on Render: [https://assignment-1-1zk4.onrender.com/]
